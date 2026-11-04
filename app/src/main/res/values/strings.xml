@@ -1,3 +1,61 @@
 <resources>
-    <string name="app_name">My Application</string>
+    <string name="app_name">VidSmart</string>
+    <string name="nav_browser">Browser</string>
+    <string name="nav_downloads">Downloads</string>
+    <string name="nav_player">Player</string>
+    <string name="nav_help">Guide</string>
+    <string name="nav_settings">Settings</string>
+
+    <!-- Browser -->
+    <string name="search_hint">Search %1$s or enter URL...</string>
+    <string name="search_engine_title">Select Search Engine</string>
+    <string name="search_suggestions">Search Suggestions</string>
+    <string name="open_engine_home">Open Homepage</string>
+    <string name="tab_new">New Tab</string>
+    <string name="tab_close">Close Tab</string>
+    <string name="tabs_count">%1$d Tabs</string>
+    <string name="ad_blocker_active">Ad Blocker Active</string>
+    <string name="ad_blocker_desc">Blocks intrusive popups and banner ads automatically</string>
+    <string name="desktop_mode">Desktop Site</string>
+    <string name="clear_history">Clear History</string>
+
+    <!-- Video Sniffer -->
+    <string name="detected_videos_title">Detected Media (%1$d)</string>
+    <string name="detected_video_play">Play</string>
+    <string name="detected_video_download">Download</string>
+    <string name="drm_warning_title">DRM Protected Content</string>
+    <string name="drm_warning_desc">This stream is protected with DRM encryption (e.g. Widevine) and cannot be captured or downloaded.</string>
+    <string name="video_quality">Quality</string>
+    <string name="video_format">Format</string>
+    <string name="video_size">Size</string>
+    <string name="unknown_size">Dynamic Stream</string>
+
+    <!-- Downloads -->
+    <string name="downloads_title">Downloads Manager</string>
+    <string name="no_downloads">No downloads yet. Browse any site and tap the video detection button to save videos!</string>
+    <string name="download_paused">Paused</string>
+    <string name="download_downloading">Downloading…</string>
+    <string name="download_completed">Completed</string>
+    <string name="download_failed">Failed</string>
+    <string name="action_pause">Pause</string>
+    <string name="action_resume">Resume</string>
+    <string name="action_delete">Delete</string>
+    <string name="action_rename">Rename</string>
+    <string name="rename_dialog_title">Rename File</string>
+    <string name="save">Save</string>
+    <string name="cancel">Cancel</string>
+
+    <!-- Player -->
+    <string name="player_title">VidSmart Player</string>
+    <string name="subtitles">Subtitles (SRT)</string>
+    <string name="subtitle_none">Off</string>
+    <string name="load_subtitle">Load SRT Subtitle URL</string>
+    <string name="playback_speed">Speed</string>
+    <string name="pip_mode">Picture in Picture</string>
+    <string name="resume_prompt">Resume playback from %1$s?</string>
+    <string name="resume_btn">Resume</string>
+    <string name="restart_btn">Start Over</string>
+
+    <!-- Phone Build & Install Guide -->
+    <string name="guide_title">Install APK on Phone (Guide)</string>
 </resources>

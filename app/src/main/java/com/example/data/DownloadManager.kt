@@ -1,7 +1,12 @@
 package com.example.data
 
+import android.content.ContentValues
 import android.content.Context
+import android.media.MediaScannerConnection
+import android.net.Uri
+import android.os.Build
 import android.os.Environment
+import android.provider.MediaStore
 import com.example.model.DownloadItem
 import com.example.model.DownloadStatus
 import kotlinx.coroutines.CoroutineScope
@@ -11,13 +16,11 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
-import java.io.FileOutputStream
 import java.io.RandomAccessFile
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
@@ -43,10 +46,24 @@ class DownloadManager(private val context: Context) {
         loadPersistedDownloads()
     }
 
-    private fun getStorageDir(): File {
-        val dir = context.getExternalFilesDir(Environment.DIRECTORY_MOVIES) ?: context.filesDir
+    /**
+     * Staging directory for partial / in-progress downloads
+     * to support HTTP Range seeking without incomplete files appearing in user's Gallery.
+     */
+    private fun getStagingDir(): File {
+        val dir = File(context.filesDir, "download_staging")
         if (!dir.exists()) dir.mkdirs()
         return dir
+    }
+
+    /**
+     * Device public video directory: Movies/VidSmart
+     */
+    fun getPublicVideoDir(): File {
+        val publicMovies = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES)
+        val vidSmartDir = File(publicMovies, "VidSmart")
+        if (!vidSmartDir.exists()) vidSmartDir.mkdirs()
+        return vidSmartDir
     }
 
     private fun loadPersistedDownloads() {
@@ -60,7 +77,6 @@ class DownloadManager(private val context: Context) {
                 val statusStr = obj.optString("status", DownloadStatus.FAILED.name)
                 val status = try {
                     val parsed = DownloadStatus.valueOf(statusStr)
-                    // If app was killed while downloading, treat as paused
                     if (parsed == DownloadStatus.DOWNLOADING || parsed == DownloadStatus.QUEUED) {
                         DownloadStatus.PAUSED
                     } else parsed
@@ -114,17 +130,21 @@ class DownloadManager(private val context: Context) {
         }
     }
 
+    /**
+     * Enqueue a new media download.
+     * Starts background download and foreground notification service.
+     */
     fun enqueueDownload(url: String, title: String, extension: String = "mp4"): String {
         val id = UUID.randomUUID().toString()
         val sanitizedTitle = title.replace(Regex("[^a-zA-Z0-9._ -]"), "_").take(60)
-        val fileName = "${sanitizedTitle}_${System.currentTimeMillis() % 10000}.$extension"
-        val targetFile = File(getStorageDir(), fileName)
+        val stagingFileName = "${sanitizedTitle}_${System.currentTimeMillis() % 10000}.$extension"
+        val stagingFile = File(getStagingDir(), stagingFileName)
 
         val item = DownloadItem(
             id = id,
             title = title,
             url = url,
-            localFilePath = targetFile.absolutePath,
+            localFilePath = stagingFile.absolutePath,
             status = DownloadStatus.DOWNLOADING,
             downloadedBytes = 0L,
             totalBytes = -1L
@@ -133,7 +153,10 @@ class DownloadManager(private val context: Context) {
         _downloads.value = listOf(item) + _downloads.value
         savePersistedDownloads()
 
-        startDownloadJob(item)
+        // Launch foreground download service
+        DownloadService.startService(context, id)
+
+        startDownloadJob(item, extension)
         return id
     }
 
@@ -150,15 +173,26 @@ class DownloadManager(private val context: Context) {
 
         updateItem(id) { it.copy(status = DownloadStatus.DOWNLOADING, errorMessage = null) }
         savePersistedDownloads()
-        startDownloadJob(item)
+
+        val extension = File(item.localFilePath).extension.ifBlank { "mp4" }
+        DownloadService.startService(context, id)
+        startDownloadJob(item, extension)
     }
 
     fun deleteDownload(id: String, deleteLocalFile: Boolean = true) {
         pauseDownload(id)
         val item = _downloads.value.find { it.id == id }
         if (deleteLocalFile && item != null) {
-            val file = File(item.localFilePath)
-            if (file.exists()) file.delete()
+            try {
+                if (item.localFilePath.startsWith("content://")) {
+                    context.contentResolver.delete(Uri.parse(item.localFilePath), null, null)
+                } else {
+                    val file = File(item.localFilePath)
+                    if (file.exists()) file.delete()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
         _downloads.value = _downloads.value.filter { it.id != id }
         savePersistedDownloads()
@@ -166,25 +200,40 @@ class DownloadManager(private val context: Context) {
 
     fun renameDownload(id: String, newTitle: String) {
         val item = _downloads.value.find { it.id == id } ?: return
-        val currentFile = File(item.localFilePath)
-        val ext = currentFile.extension.ifBlank { "mp4" }
-        val sanitized = newTitle.replace(Regex("[^a-zA-Z0-9._ -]"), "_")
-        val newFile = File(currentFile.parentFile, "$sanitized.$ext")
-
-        val finalPath = if (currentFile.exists() && currentFile != newFile) {
-            if (currentFile.renameTo(newFile)) newFile.absolutePath else item.localFilePath
+        if (item.localFilePath.startsWith("content://")) {
+            // Update title in state and MediaStore if applicable
+            try {
+                val cv = ContentValues().apply {
+                    put(MediaStore.Video.Media.TITLE, newTitle)
+                }
+                context.contentResolver.update(Uri.parse(item.localFilePath), cv, null, null)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+            updateItem(id) { it.copy(title = newTitle) }
         } else {
-            newFile.absolutePath
-        }
+            val currentFile = File(item.localFilePath)
+            val ext = currentFile.extension.ifBlank { "mp4" }
+            val sanitized = newTitle.replace(Regex("[^a-zA-Z0-9._ -]"), "_")
+            val newFile = File(currentFile.parentFile, "$sanitized.$ext")
 
-        updateItem(id) { it.copy(title = newTitle, localFilePath = finalPath) }
+            val finalPath = if (currentFile.exists() && currentFile != newFile) {
+                if (currentFile.renameTo(newFile)) {
+                    MediaScannerConnection.scanFile(context, arrayOf(newFile.absolutePath), null, null)
+                    newFile.absolutePath
+                } else item.localFilePath
+            } else {
+                newFile.absolutePath
+            }
+            updateItem(id) { it.copy(title = newTitle, localFilePath = finalPath) }
+        }
         savePersistedDownloads()
     }
 
-    private fun startDownloadJob(item: DownloadItem) {
+    private fun startDownloadJob(item: DownloadItem, extension: String) {
         val job = scope.launch {
-            val file = File(item.localFilePath)
-            var currentBytes = if (file.exists()) file.length() else 0L
+            val stagingFile = File(item.localFilePath)
+            var currentBytes = if (stagingFile.exists()) stagingFile.length() else 0L
 
             try {
                 val requestBuilder = Request.Builder()
@@ -197,9 +246,8 @@ class DownloadManager(private val context: Context) {
 
                 val response = httpClient.newCall(requestBuilder.build()).execute()
                 if (!response.isSuccessful && response.code != 206) {
-                    // If range not satisfiable, restart from 0
                     if (response.code == 416) {
-                        file.delete()
+                        stagingFile.delete()
                         currentBytes = 0L
                     } else {
                         throw Exception("HTTP Error: ${response.code} ${response.message}")
@@ -224,7 +272,7 @@ class DownloadManager(private val context: Context) {
                     )
                 }
 
-                val raf = RandomAccessFile(file, "rw")
+                val raf = RandomAccessFile(stagingFile, "rw")
                 raf.seek(currentBytes)
 
                 val buffer = ByteArray(32 * 1024)
@@ -259,8 +307,12 @@ class DownloadManager(private val context: Context) {
                 inputStream.close()
                 response.close()
 
+                // Save completed video to device's public video folder (Movies/VidSmart)
+                val publicDestinationPath = exportToPublicVideos(stagingFile, item.title, extension)
+
                 updateItem(item.id) {
                     it.copy(
+                        localFilePath = publicDestinationPath,
                         downloadedBytes = currentBytes,
                         totalBytes = if (totalBytes > 0) totalBytes else currentBytes,
                         status = DownloadStatus.COMPLETED,
@@ -286,8 +338,95 @@ class DownloadManager(private val context: Context) {
                 activeJobs.remove(item.id)
             }
         }
-
         activeJobs[item.id] = job
+    }
+
+    /**
+     * Exports completed media file from staging into the device's public video folder (Movies/VidSmart).
+     * Uses Android MediaStore on Android 10+ (API 29+) so it appears in the device's Gallery,
+     * Google Photos, and Movies folder immediately without requiring deprecated permissions.
+     */
+    private fun exportToPublicVideos(stagingFile: File, title: String, extension: String): String {
+        val sanitizedTitle = title.replace(Regex("[^a-zA-Z0-9._ -]"), "_").take(60)
+        val finalFileName = "${sanitizedTitle}_${System.currentTimeMillis() % 10000}.$extension"
+        val mimeType = when (extension.lowercase()) {
+            "mp4" -> "video/mp4"
+            "webm" -> "video/webm"
+            "mkv" -> "video/x-matroska"
+            "ts" -> "video/mp2t"
+            "avi" -> "video/x-msvideo"
+            else -> "video/*"
+        }
+
+        // 1. Android 10+ (API 29+) via MediaStore into public Movies/VidSmart
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            try {
+                val resolver = context.contentResolver
+                val values = ContentValues().apply {
+                    put(MediaStore.Video.Media.DISPLAY_NAME, finalFileName)
+                    put(MediaStore.Video.Media.TITLE, title)
+                    put(MediaStore.Video.Media.MIME_TYPE, mimeType)
+                    put(MediaStore.Video.Media.RELATIVE_PATH, "${Environment.DIRECTORY_MOVIES}/VidSmart")
+                    put(MediaStore.Video.Media.IS_PENDING, 1)
+                }
+
+                val collectionUri = MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+                val insertedUri = resolver.insert(collectionUri, values)
+
+                if (insertedUri != null) {
+                    resolver.openOutputStream(insertedUri)?.use { outputStream ->
+                        stagingFile.inputStream().use { inputStream ->
+                            inputStream.copyTo(outputStream)
+                        }
+                    }
+                    values.clear()
+                    values.put(MediaStore.Video.Media.IS_PENDING, 0)
+                    resolver.update(insertedUri, values, null, null)
+
+                    // Also check if public file system path is readable
+                    val resolvedPath = queryFilePath(insertedUri)
+                    stagingFile.delete() // Clean staging
+                    return resolvedPath ?: insertedUri.toString()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+
+        // 2. Direct public movies directory (API < 29 or fallback)
+        try {
+            val publicDir = getPublicVideoDir()
+            val targetFile = File(publicDir, finalFileName)
+            stagingFile.copyTo(targetFile, overwrite = true)
+            stagingFile.delete()
+
+            // Index in Android MediaStore so Gallery apps discover it immediately
+            MediaScannerConnection.scanFile(
+                context,
+                arrayOf(targetFile.absolutePath),
+                arrayOf(mimeType)
+            ) { _, _ -> }
+
+            return targetFile.absolutePath
+        } catch (e: Exception) {
+            e.printStackTrace()
+            // If public write fails, return staging path so video isn't lost
+            return stagingFile.absolutePath
+        }
+    }
+
+    private fun queryFilePath(uri: Uri): String? {
+        return try {
+            val projection = arrayOf(MediaStore.Video.Media.DATA)
+            context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
+                val colIdx = cursor.getColumnIndex(MediaStore.Video.Media.DATA)
+                if (colIdx != -1 && cursor.moveToFirst()) {
+                    cursor.getString(colIdx)
+                } else null
+            }
+        } catch (_: Exception) {
+            null
+        }
     }
 
     private fun updateItem(id: String, transform: (DownloadItem) -> DownloadItem) {
@@ -297,6 +436,15 @@ class DownloadManager(private val context: Context) {
     }
 
     companion object {
+        @Volatile
+        private var instance: DownloadManager? = null
+
+        fun getInstance(context: Context): DownloadManager {
+            return instance ?: synchronized(this) {
+                instance ?: DownloadManager(context.applicationContext).also { instance = it }
+            }
+        }
+
         fun formatBytes(bytes: Long): String {
             if (bytes <= 0) return "0 B"
             val kb = bytes / 1024.0

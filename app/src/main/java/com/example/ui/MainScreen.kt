@@ -1,5 +1,6 @@
 package com.example.ui
 
+import android.os.Build
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
@@ -61,8 +62,22 @@ data class ActivePlayingVideo(
 @Composable
 fun MainScreen() {
     val context = LocalContext.current
-    val downloadManager = remember { DownloadManager(context) }
+    val downloadManager = remember { DownloadManager.getInstance(context) }
     val downloads by downloadManager.downloads.collectAsState()
+
+    // Request notification permission on Android 13+ for background download progress
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        val permissionLauncher = androidx.activity.compose.rememberLauncherForActivityResult(
+            androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+        ) { /* permission result handled */ }
+
+        androidx.compose.runtime.LaunchedEffect(Unit) {
+            val permission = android.Manifest.permission.POST_NOTIFICATIONS
+            if (androidx.core.content.ContextCompat.checkSelfPermission(context, permission) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                permissionLauncher.launch(permission)
+            }
+        }
+    }
 
     var currentTab by remember { mutableStateOf(NavTab.BROWSER) }
     var activePlayingVideo by remember { mutableStateOf<ActivePlayingVideo?>(null) }

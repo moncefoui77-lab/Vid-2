@@ -111,7 +111,7 @@ fun DownloadsScreen(
                 color = MaterialTheme.colorScheme.onBackground
             )
             Text(
-                text = "${downloads.size} total files • ${activeDownloads.size} active",
+                text = "${downloads.size} files • ${activeDownloads.size} active • Public Movies/VidSmart",
                 fontSize = 13.sp,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -318,7 +318,7 @@ fun DownloadItemCard(
                         DownloadStatus.COMPLETED -> {
                             val file = File(item.localFilePath)
                             val sizeStr = if (file.exists()) DownloadManager.formatBytes(file.length()) else DownloadManager.formatBytes(item.totalBytes)
-                            "Completed • $sizeStr"
+                            "Completed • $sizeStr • Saved to Movies/VidSmart"
                         }
                         DownloadStatus.DOWNLOADING -> {
                             val dlStr = DownloadManager.formatBytes(item.downloadedBytes)
