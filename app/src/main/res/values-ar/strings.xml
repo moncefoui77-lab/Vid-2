@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">VidSmart</string>
+    <string name="nav_browser">المتصفح</string>
+    <string name="nav_downloads">التنزيلات</string>
+    <string name="nav_player">المشغل</string>
+    <string name="nav_help">دليل التثبيت</string>
+    <string name="nav_settings">الإعدادات</string>
+
+    <!-- Browser -->
+    <string name="search_hint">ابحث في %1$s أو اكتب الرابط...</string>
+    <string name="search_engine_title">اختيار محرك البحث</string>
+    <string name="search_suggestions">اقتراحات البحث</string>
+    <string name="open_engine_home">فتح الصفحة الرئيسية</string>
+    <string name="tab_new">علامة تبويب جديدة</string>
+    <string name="tab_close">إغلاق التبويب</string>
+    <string name="tabs_count">%1$d تبويبات</string>
+    <string name="ad_blocker_active">مانع الإعلانات مفعّل</string>
+    <string name="ad_blocker_desc">حجب النوافذ المنبثقة والإعلانات المزعجة تلقائياً</string>
+    <string name="desktop_mode">وضع سطح المكتب</string>
+    <string name="clear_history">مسح السجل</string>
+
+    <!-- Video Sniffer -->
+    <string name="detected_videos_title">الفيديوهات المكتشفة (%1$d)</string>
+    <string name="detected_video_play">تشغيل الآن</string>
+    <string name="detected_video_download">تنزيل</string>
+    <string name="drm_warning_title">محتوى محمي بحقوق النشر (DRM)</string>
+    <string name="drm_warning_desc">هذا البث محمي بتشفير DRM (مثل Netflix أو Widevine) ولا يمكن تنزيله أو التقاطه حفاظاً على معايير الحماية.</string>
+    <string name="video_quality">الجودة</string>
+    <string name="video_format">الصيغة</string>
+    <string name="video_size">الحجم</string>
+    <string name="unknown_size">بث مباشر / جودة متغيرة</string>
+
+    <!-- Downloads -->
+    <string name="downloads_title">مدير التنزيلات</string>
+    <string name="no_downloads">لا توجد تنزيلات حتى الآن. تصفح أي موقع واضغط على زر اكتشاف الفيديو لتحميله!</string>
+    <string name="download_paused">متوقف مؤقتاً</string>
+    <string name="download_downloading">جارٍ التحميل…</string>
+    <string name="download_completed">مكتمل</string>
+    <string name="download_failed">فشل التحميل</string>
+    <string name="action_pause">إيقاف مؤقت</string>
+    <string name="action_resume">استئناف</string>
+    <string name="action_delete">حذف</string>
+    <string name="action_rename">إعادة تسمية</string>
+    <string name="rename_dialog_title">إعادة تسمية الملف</string>
+    <string name="save">حفظ</string>
+    <string name="cancel">إلغاء</string>
+
+    <!-- Player -->
+    <string name="player_title">مشغل VidSmart</string>
+    <string name="subtitles">الترجمة (SRT)</string>
+    <string name="subtitle_none">إيقاف</string>
+    <string name="load_subtitle">تحميل رابط ملف ترجمة SRT</string>
+    <string name="playback_speed">سرعة التشغيل</string>
+    <string name="pip_mode">وضع صورة داخل صورة (PiP)</string>
+    <string name="resume_prompt">استئناف التشغيل من %1$s؟</string>
+    <string name="resume_btn">استئناف</string>
+    <string name="restart_btn">من البداية</string>
+
+    <!-- Phone Build & Install Guide -->
+    <string name="guide_title">طريقة التثبيت على الهاتف (دليل المبتدئين)</string>
+</resources>
